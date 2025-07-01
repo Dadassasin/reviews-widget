@@ -1,0 +1,23 @@
+{
+  "name": "my-widget-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@lit-labs/virtualizer": "^2.1.0",
+    "@twind/core": "^1.1.3",
+    "@twind/preset-autoprefix": "^1.0.7",
+    "@twind/preset-tailwind": "^1.1.4",
+    "axios": "^1.9.0",
+    "lit": "^3.3.0",
+    "twind": "^0.16.19"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.4",
+    "vite": "^6.3.5"
+  }
+}

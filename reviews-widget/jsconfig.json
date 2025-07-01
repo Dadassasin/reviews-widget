@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+      "allowJs": true,
+      "checkJs": false,
+      "moduleResolution": "node",
+      "target": "es2020",
+      "jsx": "preserve"
+    },
+    "include": ["src/**/*"]
+  }
+  
