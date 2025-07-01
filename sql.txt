@@ -1,0 +1,180 @@
+-- Расширение для UUID
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 1. ENUM-типы
+CREATE TYPE reaction_type AS ENUM ('like', 'dislike');
+CREATE TYPE report_reason AS ENUM ('spam', 'offensive', 'false', 'other');
+
+-- 2. Пользователи
+CREATE TABLE users (
+  id           SERIAL        PRIMARY KEY,
+  name         VARCHAR(255)  NOT NULL,
+  first_name   VARCHAR(255)  NOT NULL,
+  last_name    VARCHAR(255)  NOT NULL,
+  email        VARCHAR(255)  NOT NULL UNIQUE,
+  password     VARCHAR(255)  NOT NULL,
+  avatar_url   TEXT,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+-- 3. Виджеты
+CREATE TABLE widgets (
+  id           SERIAL        PRIMARY KEY,
+  owner_id     INTEGER       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  widget_key   UUID          NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+  title        VARCHAR(255)  NOT NULL,
+  config       JSONB         NOT NULL DEFAULT '{}'::jsonb,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_widgets_owner_id ON widgets(owner_id);
+
+-- 4. Отзывы
+CREATE TABLE reviews (
+  id            BIGSERIAL     PRIMARY KEY,
+  widget_id     INTEGER       NOT NULL REFERENCES widgets(id) ON DELETE CASCADE,
+  author_id     INTEGER       REFERENCES users(id)          ON DELETE SET NULL,
+  rating        SMALLINT      NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  text          TEXT          NOT NULL,
+  sentiment     VARCHAR(50),
+  emotion       VARCHAR(50),
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_reviews_widget_id ON reviews(widget_id);
+
+-- 5. Медиавложения
+CREATE TABLE review_media (
+  id           SERIAL        PRIMARY KEY,
+  review_id    BIGINT        NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  url          TEXT          NOT NULL,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_review_media_review_id ON review_media(review_id);
+
+-- 6. Реакции на отзывы
+CREATE TABLE review_reactions (
+  id           SERIAL         PRIMARY KEY,
+  review_id    BIGINT         NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  user_id      INTEGER        NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+  reaction     reaction_type  NOT NULL,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+  UNIQUE (review_id, user_id)
+);
+CREATE INDEX idx_review_reactions_review_id ON review_reactions(review_id);
+
+-- 7. Комментарии к отзывам
+CREATE TABLE review_comments (
+  id           SERIAL        PRIMARY KEY,
+  review_id    BIGINT        NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  author_id    INTEGER       REFERENCES users(id)          ON DELETE SET NULL,
+  text         TEXT          NOT NULL,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_review_comments_review_id ON review_comments(review_id);
+
+-- 8. Реакции на комментарии
+CREATE TABLE comment_reactions (
+  id           SERIAL         PRIMARY KEY,
+  comment_id   INTEGER        NOT NULL REFERENCES review_comments(id) ON DELETE CASCADE,
+  user_id      INTEGER        NOT NULL REFERENCES users(id)            ON DELETE CASCADE,
+  reaction     reaction_type  NOT NULL,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+  UNIQUE (comment_id, user_id)
+);
+CREATE INDEX idx_comment_reactions_comment_id ON comment_reactions(comment_id);
+
+-- 9. Жалобы на отзывы
+CREATE TABLE review_reports (
+  id           SERIAL         PRIMARY KEY,
+  review_id    BIGINT         NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  user_id      INTEGER        REFERENCES users(id)         ON DELETE SET NULL,
+  reason       report_reason  NOT NULL,
+  comment      TEXT,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_review_reports_review_id ON review_reports(review_id);
+
+-- 10. Жалобы на комментарии
+CREATE TABLE comment_reports (
+  id           SERIAL         PRIMARY KEY,
+  comment_id   INTEGER        NOT NULL REFERENCES review_comments(id) ON DELETE CASCADE,
+  user_id      INTEGER        REFERENCES users(id)                ON DELETE SET NULL,
+  reason       report_reason  NOT NULL,
+  comment      TEXT,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_comment_reports_comment_id ON comment_reports(comment_id);
+
+-- 11. Q&A: вопросы
+CREATE TABLE questions (
+  id           BIGSERIAL     PRIMARY KEY,
+  widget_id    INTEGER       NOT NULL REFERENCES widgets(id) ON DELETE CASCADE,
+  author_id    INTEGER       REFERENCES users(id)    ON DELETE SET NULL,
+  text         TEXT          NOT NULL,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_questions_widget_id ON questions(widget_id);
+
+-- 12. Реакции на вопросы
+CREATE TABLE question_reactions (
+  id           SERIAL         PRIMARY KEY,
+  question_id  BIGINT         NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+  user_id      INTEGER        NOT NULL REFERENCES users(id)     ON DELETE CASCADE,
+  reaction     reaction_type  NOT NULL,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+  UNIQUE (question_id, user_id)
+);
+CREATE INDEX idx_question_reactions_question_id ON question_reactions(question_id);
+
+-- 13. Ответы на вопросы
+CREATE TABLE question_answers (
+  id           BIGSERIAL     PRIMARY KEY,
+  question_id  BIGINT        NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+  author_id    INTEGER       REFERENCES users(id)         ON DELETE SET NULL,
+  text         TEXT          NOT NULL,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_question_answers_question_id ON question_answers(question_id);
+
+-- 14. Реакции на ответы
+CREATE TABLE answer_reactions (
+  id           SERIAL         PRIMARY KEY,
+  answer_id    BIGINT         NOT NULL REFERENCES question_answers(id) ON DELETE CASCADE,
+  user_id      INTEGER        NOT NULL REFERENCES users(id)              ON DELETE CASCADE,
+  reaction     reaction_type  NOT NULL,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+  UNIQUE (answer_id, user_id)
+);
+CREATE INDEX idx_answer_reactions_answer_id ON answer_reactions(answer_id);
+
+-- 15. Жалобы на вопросы
+CREATE TABLE question_reports (
+  id           SERIAL         PRIMARY KEY,
+  question_id  BIGINT         NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+  user_id      INTEGER        REFERENCES users(id)           ON DELETE SET NULL,
+  reason       report_reason  NOT NULL,
+  comment      TEXT,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_question_reports_question_id ON question_reports(question_id);
+
+-- 16. Жалобы на ответы
+CREATE TABLE answer_reports (
+  id           SERIAL         PRIMARY KEY,
+  answer_id    BIGINT         NOT NULL REFERENCES question_answers(id) ON DELETE CASCADE,
+  user_id      INTEGER        REFERENCES users(id)           ON DELETE SET NULL,
+  reason       report_reason  NOT NULL,
+  comment      TEXT,
+  created_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_answer_reports_answer_id ON answer_reports(answer_id);
+
+-- 17. Refresh-токены
+CREATE TABLE refresh_tokens (
+  id           SERIAL        PRIMARY KEY,
+  user_id      INTEGER       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token        UUID          NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+  expires_at   TIMESTAMPTZ   NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
+  revoked      BOOLEAN       NOT NULL DEFAULT false,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
